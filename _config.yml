@@ -3,8 +3,8 @@
 # ----------------------- #
 
 url: http://jogojapan.github.com
-title: Jogojapan Blog
-subtitle: Various thoughts, suggestions and reports around string algorithms, natural language processing and C++
+title: stringalgo::sufex
+subtitle: Thoughts, suggestions and reports on string algorithms, natural language processing and C++
 author: jogojapan
 simple_search: http://google.com/search
 description:
