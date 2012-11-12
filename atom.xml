@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[stringalgo::sufex]]></title>
+  <link href="http://jogojapan.github.com/atom.xml" rel="self"/>
+  <link href="http://jogojapan.github.com/"/>
+  <updated>2012-11-12T14:10:10+09:00</updated>
+  <id>http://jogojapan.github.com/</id>
+  <author>
+    <name><![CDATA[jogojapan]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Ultimate Goal: Better Natural Language Processing]]></title>
+    <link href="http://jogojapan.github.com/blog/2012/11/12/ultimate-goal-dissecting-natural-language/"/>
+    <updated>2012-11-12T00:02:00+09:00</updated>
+    <id>http://jogojapan.github.com/blog/2012/11/12/ultimate-goal-dissecting-natural-language</id>
+    <content type="html"><![CDATA[<p>Natural language processing has become big. Almost every university
+employs at least a few researchers specializing in it, almost every
+major internet company hires NLP specialists to help analyse the
+natural language part of &#8220;big data&#8221;, and hundreds of workshops and
+conferences are held every year.</p>
+
+<p>Its methods have changed, too: Several decades ago, ideas based on
+mathematical logic dominated the <em>semantic analysis</em>, and ideas based
+on phrase structure grammars dominated the <em>syntactic
+analysis</em>. However, for the past ten years or so, statistical machine
+learning and large-scale corpus studies have dominated the field.</p>
+
+<p>This blog is dedicated to its own variety of natural language
+processing. Its principles are different from those of today&#8217;s
+mainstream NLP, and they are different from most (though probably not
+all) of the NLP and computational linguistics of the past. The key
+elements are:</p>
+
+<ul>
+<li><p><strong>Lexeme-specific rules:</strong> The syntax of a language is described
+using rules, but there are far more rules than in traditional
+phrase structure grammars, and there are many rules that apply to a
+single lexeme only.</p></li>
+<li><p><strong>Structural analogy:</strong> Sentence structures that cannot be analysed
+using existing rules are analysed in the same way as sentences that
+are structurally <em>similar</em> or <em>analogous</em>. This notion of
+structural analogy will be defined in terms of predetermined
+transformation rules as well as approximate (fuzzy) matching
+against corpora of example sentences.</p></li>
+<li><p><strong>Interactive refinement:</strong> The formal description of the grammar
+(lexeme-specific rules, transformation rules and other elements) is
+created iteratively by testing intermediate stages against large
+corpora. To this end, a specialized corpus query system (CQS) is
+used.</p></li>
+</ul>
+
+
+<p>A lot of this is still very unclear. I started my activities by
+creating a CQS, and doing this involved a significant amount of
+research into the architecture of search engines, and the data
+structures and algorithms they use.</p>
+
+<p>This blog is going to describe my approach to NLP as it evolves, and
+it will do so in great detail. I&#8217;ll start with the CQS, which I
+decided to re-implement from scratch. I&#8217;ll blog about my choice of
+algorithms and implementation strategies, as well as specific &ndash;
+and sometimes very minor &ndash; programming techniques as I rebuild
+the CQS. This alone will take many months, perhaps more than a year.</p>
+
+<p>I have also started to work on the definition of the lexeme-specific
+rule framework and prototypical designs for a parser. Posts related to
+this will start to appear in the blog soon, perhaps in a few weeks or
+months from now. Over time, the focus will gradually shift from string
+algorithms and implementation strategies towards grammar description
+and linguistics, and the blog title, <em>Algorithms on Strings</em>, will be
+increasingly</p>
+
+<p>My programming language is C++ (C++11 and a lot of Boost), and the
+operating system is Linux. The hardware I use includes both
+Intel-based PCs and large Xeon-based servers with tens of CPU cores
+and 1 TB of RAM.</p>
+]]></content>
+  </entry>
+  
+</feed>
