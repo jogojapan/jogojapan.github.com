@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Measuring CPU time, Boost and C++11"
-date: 2012-11-12 14:20
+date: 2012-11-23 14:20
 comments: true
 categories: 
 published: false
@@ -29,12 +29,14 @@ There are two types of time I need to be able to measure:
    The actual time that passed between a predefined starting point and
    an end point, measured in seconds.
 
- * __CPU time__ (for example described [here](http://en.wikipedia.org/wiki/CPU_time): The number
-   of ticks (of the CPU clock) that passed _while the CPU was busy
-   performing the process being measured_. This does not include time
-   spent during non-CPU related activities, such as IO. While CPU time
-   is measured in clock ticks, it is usually converted to seconds by
-   dividing it by the _assumed number of clock ticks per second_
+ * __CPU time__ (for example described
+   [here](http://en.wikipedia.org/wiki/CPU_time)): The number of ticks
+   (of the CPU clock) that passed _while the CPU was busy performing
+   the process being measured_. This does not include time spent
+   during non-CPU related activities, such as IO, and it does not
+   include time the CPU spent performing other processes. While CPU
+   time is measured in clock ticks, it is usually converted to seconds
+   by dividing it by the _assumed number of clock ticks per second_
    `CLOCKS_PER_SEC`. On Linux this is a OS-defined constant unrelated
    to the _real_ number of ticks per second, hence the resulting
    number cannot be used to compare CPU time to real time. It can only
@@ -81,11 +83,49 @@ std::cout << "Elapsed time: " << elapsed_seconds << " seconds" << std::endl;
 {% endcodeblock lang:cpp %}
 
 The benefits of this are **portability** and **convenience**, but
-unfortunately this can only be used to measure real time.
+unfortunately this can only be used to measure real time, not CPU
+time.
 
 ###Boost
 
+The Boost library provides a similarly designed framework with the
+same clocks for real time (in fact, of course, `chrono` was designed
+using `boost:chrono` as a model). In addition, there are three more
+clocks:
 
+    boost::chrono::process_user_cpu_clock::now()   // User CPU time since the process
+                                                   // started (including user CPU time
+                                                   // of child processes)
+
+    boost::chrono::process_system_cpu_clock::now() // System CPU time since the process
+                                                   // started (including user CPU time
+                                                   // of child processes)
+
+    boost::chrono::process_real_cpu_clock::now()   // Wall-clock time, measured using the
+                                                   // CPU clock of the process
+
+
+Boost also provides a combined clock,
+`boost::chrono::process_cpu_clock`, which gives access to time points
+for all three types of CPU clock.
+
+This is also **portable** and **convenient**, but the
+`boost::chrono::time_point` objects returned are not compatible with
+`std::time_point`, which I find makes the code look confusing when you
+use both the time points and duration object from `boost::chrono` and
+`std::chrono` in parallel. I also had difficulties using the combined
+user/system/real clock provided by Boost.
+
+What I wanted is a clock that returns time points which include user,
+system and real time, where real time is measured using the
+high-resolution clock from `std`, and user and system time are
+measured using a platform-specific implementation, but returning
+`std::chrono::time_point` objects (and `std::chrono::duration` objects
+when the difference between two time points is calculated).
+
+I ended up implementing this myself. It now exists in the form of the
+[util/proctime.hpp](https://github.com/jogojapan/sufex/blob/master/src/util/proctime.hpp)
+header within the sufex repository.
 
 Here is the definition of `time_point`:
 
