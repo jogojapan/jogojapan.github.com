@@ -1,3 +1,22 @@
 {% comment %}
   Add content to be output at the bottom of each page. (You might use this for analytics scripts, for example)
 {% endcomment %}
+
+
+{% comment %}
+  The following is for TOC generation. It should be placed at the
+  bottom of this file. Source:
+  http://brizzled.clapper.org/blog/2012/02/04/generating-a-table-of-contents-in-octopress/
+{% endcomment %}
+{% if index %}
+  {% comment %}
+  No table of contents on the index page.
+  {% endcomment %}
+{% elsif page.toc == true %}
+  <script type="text/javascript">
+  jQuery(document).ready(function() {
+    // Put a TOC right before the entry content.
+    generateTOC('.entry-content', 'Table of Contents');
+  });
+  </script>
+{% endif %}
