@@ -2,10 +2,11 @@
 // To give it a try, uncomment some of the lines below rebuild your blog, and see how it works.
 // If you need a handy color picker try http://hslpicker.com
 
-$main-bg: rgba(#e8e8e8, 0.7) !default;
+//$main-bg: rgba(#e8e8e8, 0.9) !default;
+$main-bg: #f5f5f5 !default;
 //$page-bg: rgba(#252525, 0.8) !default;
-$header-bg: rgba(#333, 0.6) !default;
-$subtitle-color: #a0a0a0;
+$header-bg: rgba(#333, 0.2) !default;
+$subtitle-color: #f5f5f5;
 $title-color: lighten(#d04040,30);
 $nav-bg: rgba(#333, 0.8) !default;
 $nav-color: lighten($nav-bg, 50) !default;
