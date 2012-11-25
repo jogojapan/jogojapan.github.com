@@ -1,10 +1,10 @@
 ---
 layout: post
 title: "Measuring CPU time, Boost and C++11"
-date: 2012-11-23 14:20
+date: 2012-11-25 19:51
 comments: true
 categories: 
-published: false
+published: true
 toc: true
 ---
 
