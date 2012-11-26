@@ -9,9 +9,9 @@
   <meta name="author" content="jogojapan">
 
   
-  <meta name="description" content="Natural language processing has become big. Almost every university
-employs at least a few researchers specializing in it, almost every
-major &hellip;">
+  <meta name="description" content="The first set of algorithms I am going to discuss will be related to
+the elementary steps of suffix array construction, in particular
+trigram sorting &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -30,6 +30,17 @@ major &hellip;">
   <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
 <link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
 <link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+<!-- For table-of-contents, using jQuery from Google. This is according to advice given on
+     http://brizzled.clapper.org/blog/2012/02/04/generating-a-table-of-contents-in-octopress/. -->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+  // Revert jQuery's '$' alias, to avoid clashes with ender.js. NOTE: Use
+  // jQuery(...), instead of $(...) from here on.
+  jQuery.noConflict();
+</script>
+<script src="/javascripts/generate-toc.js" type="text/javascript"></script>
+<script src="/javascripts/jquery.tableofcontents.min.js" type="text/javascript"></script>
 
   
 
@@ -72,6 +83,460 @@ major &hellip;">
       
   <header>
     
+      <h1 class="entry-title"><a href="/blog/2012/11/25/measuring-cpu-time/">Measuring CPU Time, Boost and C++11</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-11-25T19:51:00+09:00" pubdate data-updated="true">25<span>th</span> Nov 2012 19:51 (JST)</time>
+        
+         | <a href="/blog/2012/11/25/measuring-cpu-time/#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>The first set of algorithms I am going to discuss will be related to
+the elementary steps of suffix array construction, in particular
+<strong>trigram sorting</strong> and <strong>lexicographic renaming</strong>, and I will start a
+series of blog posts about this soon.</p>
+
+<p>However, to be able to compare various implementations of those
+algorithms, it&#8217;s important to use a clearly defined and consistent
+approach to <strong>measuring time</strong>. In addition to using Linux tools like
+<a href="http://linux.die.net/man/1/time">time</a> and
+<a href="http://linux.die.net/man/1/ps">ps</a>, I would like to be able to build
+precise time-measurements into the C++ code, so as to be able to
+measure precisely what amount of time is spent in which part of the
+program.</p>
+
+<h1>Two types of time</h1>
+
+<p>There are two types of time I need to be able to measure:</p>
+
+<ul>
+<li><p><strong>Real time</strong> (aka <a href="http://en.wikipedia.org/wiki/Wall_clock_time">wall clock time</a>):
+The actual time that passed between a predefined starting point and
+an end point, measured in seconds.</p></li>
+<li><p><strong>CPU time</strong> (for example described
+<a href="http://en.wikipedia.org/wiki/CPU_time">here</a>): The number of ticks
+(of the CPU clock) that passed <em>while the CPU was busy performing
+the process being measured</em>. This does not include time spent
+during non-CPU related activities, such as IO, and it does not
+include time the CPU spent performing other processes. While CPU
+time is measured in clock ticks, it is usually converted to seconds
+by dividing it by the <em>number of clock ticks per second</em>, which on
+Linux you can retrieve using a system call:
+<code>::sysconf(_SC_CLK_TCK)</code>.</p></li>
+</ul>
+
+
+<p>There is a third type of time that will be important:
+<strong>Thread-specific CPU time</strong>, but I won&#8217;t talk about this in the
+current post.</p>
+
+<hr />
+
+<h1>Library support</h1>
+
+<h2>C++11</h2>
+
+<p>C++11 offers a convenient method to measure real time, <strong>but not CPU
+time</strong>, through the <a href="http://en.cppreference.com/w/cpp/chrono#chrono_library"><code>&lt;chrono&gt;</code> library</a>.
+Specifically, there are three functions that return a representation
+of the <em>current point in time</em>:</p>
+
+<pre><code>std::chrono::system_clock::now()  // System clock, may be modified by the OS while
+                                  // the process is running, e.g. when switching
+                                  // to daylight-saving time
+
+std::chrono::steady_clock::now() // Steady clock, guaranteed to run steadily from the
+                                 // moment the process is started to its end
+
+std::chrono::high_resolution_clock::now() // Steady clock with high resolution
+</code></pre>
+
+<p>The existence of all three is required by the Standard, so they can be
+used regardless of the platform the code is written for. The
+<code>std::time_point</code> object returned by these functions can easily be
+used to compute the time difference between two time points (using
+<code>operator-</code>), and that difference can be readily converted to any unit
+of choice (using <code>std::chrono::duration_cast</code>):</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">auto</span> <span class="n">start</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">system_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span><span class='line'><span class="cm">/* .. perform work .. */</span>
+</span><span class='line'><span class="k">auto</span> <span class="n">end</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">system_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="n">elapsed_seconds</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">duration_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">seconds</span><span class="o">&gt;</span>
+</span><span class='line'>                         <span class="p">(</span><span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">).</span><span class="n">count</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;Elapsed time: &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">elapsed_seconds</span> <span class="o">&lt;&lt;</span> <span class="s">&quot; seconds&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The benefits of this are <strong>portability</strong> and <strong>convenience</strong>, but
+unfortunately this can only be used to measure real time, not CPU
+time.</p>
+
+<h2>Boost</h2>
+
+<p>The Boost library provides a similarly designed framework with the
+same clocks for real time (in fact, of course, <code>std::chrono</code> was
+designed using <code>boost:chrono</code> as a model). In addition, there are
+three more clocks:</p>
+
+<pre><code>boost::chrono::process_user_cpu_clock::now()   // User CPU time since the process
+                                               // started (including user CPU time
+                                               // of child processes)
+
+boost::chrono::process_system_cpu_clock::now() // System CPU time since the process
+                                               // started (including user CPU time
+                                               // of child processes)
+
+boost::chrono::process_real_cpu_clock::now()   // Wall-clock time, measured using the
+                                               // CPU clock of the process
+</code></pre>
+
+<p>Boost also provides a <strong>combined clock</strong>,
+<code>boost::chrono::process_cpu_clock</code>, which gives access to time points
+for all three types of CPU clock. This is also <strong>portable</strong> and
+<strong>convenient</strong>, but I had a <strong>number of problems</strong> with this:</p>
+
+<h2>Problems with Boost</h2>
+
+<ul>
+<li><p><code>boost::chrono::time_point</code> objects returned by the Boost clocks are
+<strong>not compatible with <code>std::time_point</code></strong>, which I find makes the code
+<em>look confusing when you use both the time points and duration object
+</em>from <code>boost::chrono</code> and <code>std::chrono</code> in parallel.</p></li>
+<li><p>The Boost CPU clocks measure time in terms of CPU ticks and
+immediately convert this to nanoseconds. The problem with this on
+typical Linux installations is that a clock tick is a relatively
+long unit of time; on my machine it is 10 milliseconds in
+length. This means that even when you measure a relatively short
+process, e.g. 2 seconds CPU time, the internal representation of
+this used by the Boost library will be 2 billion nanoseconds. The
+data type used to store the value is <code>std::clock_t</code>, which on 32-bit
+Linux is typically a signed 32-bit integer, which means 2 billion is
+very close to overflow. As a result, you get <strong>overflows and negative
+run times even for processes of just a few seconds (even sub-second
+if several threads are involved).</strong></p></li>
+<li><p>There doesn&#8217;t seem to be any <strong>pretty-print</strong> function, nor
+<strong>unit-converters</strong> for the combined user/system/real clock Boost
+provides. I am usually interested in measuring all three of them, but
+<code>boost::chrono::process_cpu_clock::now()</code> returns time point objects
+that are triples, and none of the convenient duration-casts and no
+pretty-printing seems to be available for them.</p></li>
+</ul>
+
+
+<hr />
+
+<h1>New implementation: <code>rlxutil::combined_clock</code></h1>
+
+<p>What I wanted is a clock that returns time points which include user,
+system and real time, where real time is measured using the
+high-resolution clock from <code>std</code>, and user and system time are
+measured using a platform-specific implementation, but using
+<code>std::chrono::time_point</code> objects (and <code>std::chrono::duration</code> objects
+when the difference between two time points is calculated).</p>
+
+<p>I ended up implementing this myself. It now exists in the form of the
+<a href="https://github.com/jogojapan/sufex/blob/master/src/util/proctime.hpp">util/proctime.hpp</a>
+header within the sufex repository. The main class is
+<code>rlxutil::combined_clock&lt;Precision&gt;</code>. Note the template parameter
+<code>Precision</code>: You can use any of the <code>std::ratio</code> types defined in
+<code>&lt;ratio&gt;</code>, e.g. <code>std::micro</code> or <code>std::nano</code> as argument. This will
+determine the internal representation of the time points: As
+nanoseconds when <code>std::nano</code> is used, as microseconds when
+<code>std::micro</code> is used, and so on.</p>
+
+<h2>Usage</h2>
+
+<p>Here is an example of how it&#8217;s used:</p>
+
+<figure class='code'><figcaption><span>combined_clock usage </span><a href='https://github.com/jogojapan/sufex/blob/master/src/util/app/combined_clock.cpp'>link</a></figcaption> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="cp">#include &quot;util/proctime.hpp&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#include &lt;ratio&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;chrono&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;thread&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;utility&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;iostream&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="n">main</span><span class="p">()</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="k">using</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">duration_cast</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">using</span> <span class="n">millisec</span>   <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">milliseconds</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">using</span> <span class="n">clock_type</span> <span class="o">=</span> <span class="n">rlxutil</span><span class="o">::</span><span class="n">combined_clock</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">micro</span><span class="o">&gt;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">auto</span> <span class="n">tp1</span> <span class="o">=</span> <span class="n">clock_type</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Perform some random calculations. */</span>
+</span><span class='line'>  <span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">step1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>  <span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">step2</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span> <span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">50000000</span> <span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">step3</span> <span class="o">=</span> <span class="n">step1</span> <span class="o">+</span> <span class="n">step2</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">swap</span><span class="p">(</span><span class="n">step1</span><span class="p">,</span><span class="n">step2</span><span class="p">);</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">swap</span><span class="p">(</span><span class="n">step2</span><span class="p">,</span><span class="n">step3</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Sleep for a while (this adds to real time, but not CPU time). */</span>
+</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">this_thread</span><span class="o">::</span><span class="n">sleep_for</span><span class="p">(</span><span class="n">millisec</span><span class="p">(</span><span class="mi">1000</span><span class="p">));</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">auto</span> <span class="n">tp2</span> <span class="o">=</span> <span class="n">clock_type</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;Elapsed time: &quot;</span>
+</span><span class='line'>            <span class="o">&lt;&lt;</span> <span class="n">duration_cast</span><span class="o">&lt;</span><span class="n">millisec</span><span class="o">&gt;</span><span class="p">(</span><span class="n">tp2</span> <span class="o">-</span> <span class="n">tp1</span><span class="p">)</span>
+</span><span class='line'>            <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Output generated by this program:</p>
+
+<pre><code>Elapsed time: [user 40, system 0, real 1070 millisec]
+</code></pre>
+
+<h2>Implementation</h2>
+
+<p>The static <code>now()</code> function generates a time point by calling
+<code>::times</code> to retrieve user and system time, as well as calling
+<code>std::chrono::high_resolution_clock::now()</code> to retrieve real time. The
+user and system times are then converted from ticks to the unit
+determined by <code>Precision</code>. This requires a tick factor, which depends
+on the number of ticks per second <code>::sysconf(SC_CLK_TCK)</code> and
+<code>Precision</code>:</p>
+
+<figure class='code'><figcaption><span>rlxutil::tickfactor<Precision> </span><a href='https://github.com/jogojapan/sufex/blob/master/src/util/proctime.hpp'>link</a></figcaption> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="cm">/* Code related to log messages removed. */</span>
+</span><span class='line'><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">Precision</span><span class="o">&gt;</span>
+</span><span class='line'><span class="k">static</span> <span class="n">std</span><span class="o">::</span><span class="n">intmax_t</span> <span class="n">tickfactor</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">static</span> <span class="n">std</span><span class="o">::</span><span class="n">intmax_t</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="n">result</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="n">result</span> <span class="o">=</span> <span class="o">::</span><span class="n">sysconf</span><span class="p">(</span><span class="n">_SC_CLK_TCK</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">result</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">)</span>
+</span><span class='line'>      <span class="n">result</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">result</span> <span class="o">&gt;</span> <span class="n">Precision</span><span class="o">::</span><span class="n">den</span><span class="p">)</span>
+</span><span class='line'>      <span class="n">result</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>      <span class="n">result</span> <span class="o">=</span> <span class="n">Precision</span><span class="o">::</span><span class="n">den</span> <span class="o">/</span> <span class="o">::</span><span class="n">sysconf</span><span class="p">(</span><span class="n">_SC_CLK_TCK</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The key differences to the Boost implementation are:</p>
+
+<ul>
+<li><p>We use <code>std::intmax_t</code> instead of <code>clock_t</code>, which on typical
+systems (including 32-bit systems) provides us with 64 bits to store
+the internal representation of the time point;</p></li>
+<li><p>We use the unit suggested by <code>Precision</code> rather than defaulting to
+nanoseconds.</p></li>
+</ul>
+
+
+<p>Both help avoid overflows and spurious negative duration
+results. Specifically, the <code>Precision</code> parameter can be used by the
+caller to obtain a representation that suits the purpose: For
+measuring very short-lived processes, <code>std::micro</code> may be best, while
+longer processes can be measured using <code>std::milli</code>.</p>
+
+<p>The clock data type itself has been implemented following the
+requirements by the C++ Standard.</p>
+
+<figure class='code'><figcaption><span>rlxutil::combined_clock<Precision> interface </span><a href='https://github.com/jogojapan/sufex/blob/master/src/util/proctime.hpp'>link</a></figcaption> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">Precision</span><span class="o">&gt;</span>
+</span><span class='line'><span class="k">class</span> <span class="nc">combined_clock</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="n">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">__is_ratio</span><span class="o">&lt;</span><span class="n">Precision</span><span class="o">&gt;::</span><span class="n">value</span><span class="p">,</span>
+</span><span class='line'>      <span class="s">&quot;Precision must be a std::ratio&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="k">public</span><span class="o">:</span>
+</span><span class='line'>  <span class="k">typedef</span> <span class="n">rep_combined_clock</span><span class="o">&lt;</span><span class="n">Precision</span><span class="o">&gt;</span>                     <span class="n">rep</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">typedef</span> <span class="n">Precision</span>                                         <span class="n">period</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">typedef</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">duration</span><span class="o">&lt;</span><span class="n">rep</span><span class="p">,</span><span class="n">period</span><span class="o">&gt;</span>                 <span class="n">duration</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">typedef</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">time_point</span><span class="o">&lt;</span><span class="n">combined_clock</span><span class="p">,</span><span class="n">duration</span><span class="o">&gt;</span>  <span class="n">time_point</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">static</span> <span class="n">constexpr</span> <span class="kt">bool</span> <span class="n">is_steady</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">static</span> <span class="n">time_point</span> <span class="n">now</span><span class="p">()</span> <span class="n">noexcept</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The internal representation of a time point, <code>combined_clock::rep</code> is
+a tuple nested into a struct:</p>
+
+<figure class='code'><figcaption><span>rlxutil::rep_combined_clock<Precision> definition </span><a href='https://github.com/jogojapan/sufex/blob/master/src/util/proctime.hpp'>link</a></figcaption> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">Precision</span><span class="o">&gt;</span>
+</span><span class='line'><span class="k">struct</span> <span class="n">rep_combined_clock</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="k">typedef</span> <span class="n">Precision</span>                             <span class="n">precision</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">typedef</span> <span class="n">std</span><span class="o">::</span><span class="n">tuple</span><span class="o">&lt;</span>
+</span><span class='line'>      <span class="n">std</span><span class="o">::</span><span class="n">intmax_t</span><span class="p">,</span>
+</span><span class='line'>      <span class="n">std</span><span class="o">::</span><span class="n">intmax_t</span><span class="p">,</span>
+</span><span class='line'>      <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">rep</span><span class="o">&gt;</span>  <span class="n">rep</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">rep</span> <span class="n">_d</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The struct wrapper was necessary to distinguish it clearly from tuple
+types that originate somewhere else: The <code>operator-</code> and
+<code>duration_cast</code> function used to calculate elapsed time only accept
+the struct defined above, not general tuples.</p>
+
+<p>The functions below were implemented inside namespace <code>std</code> to enable
+pretty-printing, elapsed-time calculation and duration-casts:</p>
+
+<figure class='code'><figcaption><span>Convenience functions </span><a href='https://github.com/jogojapan/sufex/blob/master/src/util/proctime.hpp'>link</a></figcaption> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">Precision</span><span class="p">,</span> <span class="k">typename</span> <span class="n">Period</span><span class="o">&gt;</span>
+</span><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">ostream</span> <span class="o">&amp;</span><span class="k">operator</span><span class="o">&lt;&lt;</span><span class="p">(</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">ostream</span> <span class="o">&amp;</span><span class="n">strm</span><span class="p">,</span>
+</span><span class='line'>    <span class="k">const</span> <span class="n">chrono</span><span class="o">::</span><span class="n">duration</span><span class="o">&lt;</span><span class="n">rlxutil</span><span class="o">::</span><span class="n">rep_combined_clock</span><span class="o">&lt;</span><span class="n">Precision</span><span class="o">&gt;</span><span class="p">,</span><span class="n">Period</span><span class="o">&gt;</span> <span class="o">&amp;</span><span class="n">dur</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">Pr</span><span class="p">,</span> <span class="k">typename</span> <span class="n">Per</span><span class="o">&gt;</span>
+</span><span class='line'><span class="n">constexpr</span> <span class="n">duration</span><span class="o">&lt;</span><span class="n">rlxutil</span><span class="o">::</span><span class="n">rep_combined_clock</span><span class="o">&lt;</span><span class="n">Pr</span><span class="o">&gt;</span><span class="p">,</span><span class="n">Per</span><span class="o">&gt;</span>
+</span><span class='line'><span class="k">operator</span><span class="o">-</span><span class="p">(</span>
+</span><span class='line'>    <span class="k">const</span> <span class="n">time_point</span><span class="o">&lt;</span><span class="n">rlxutil</span><span class="o">::</span><span class="n">combined_clock</span><span class="o">&lt;</span><span class="n">Pr</span><span class="o">&gt;</span><span class="p">,</span>
+</span><span class='line'>                     <span class="n">duration</span><span class="o">&lt;</span><span class="n">rlxutil</span><span class="o">::</span><span class="n">rep_combined_clock</span><span class="o">&lt;</span><span class="n">Pr</span><span class="o">&gt;</span><span class="p">,</span><span class="n">Per</span><span class="o">&gt;&gt;</span> <span class="o">&amp;</span><span class="n">lhs</span><span class="p">,</span>
+</span><span class='line'>    <span class="k">const</span> <span class="n">time_point</span><span class="o">&lt;</span><span class="n">rlxutil</span><span class="o">::</span><span class="n">combined_clock</span><span class="o">&lt;</span><span class="n">Pr</span><span class="o">&gt;</span><span class="p">,</span>
+</span><span class='line'>                     <span class="n">duration</span><span class="o">&lt;</span><span class="n">rlxutil</span><span class="o">::</span><span class="n">rep_combined_clock</span><span class="o">&lt;</span><span class="n">Pr</span><span class="o">&gt;</span><span class="p">,</span><span class="n">Per</span><span class="o">&gt;&gt;</span> <span class="o">&amp;</span><span class="n">rhs</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">ToDur</span><span class="p">,</span> <span class="k">typename</span> <span class="n">Pr</span><span class="p">,</span> <span class="k">typename</span> <span class="n">Period</span><span class="o">&gt;</span>
+</span><span class='line'><span class="n">constexpr</span> <span class="n">duration</span><span class="o">&lt;</span><span class="n">rlxutil</span><span class="o">::</span><span class="n">rep_combined_clock</span><span class="o">&lt;</span><span class="n">Pr</span><span class="o">&gt;</span><span class="p">,</span><span class="k">typename</span> <span class="n">ToDur</span><span class="o">::</span><span class="n">period</span><span class="o">&gt;</span>
+</span><span class='line'><span class="n">duration_cast</span><span class="p">(</span><span class="k">const</span> <span class="n">duration</span><span class="o">&lt;</span><span class="n">rlxutil</span><span class="o">::</span><span class="n">rep_combined_clock</span><span class="o">&lt;</span><span class="n">Pr</span><span class="o">&gt;</span><span class="p">,</span><span class="n">Period</span><span class="o">&gt;</span> <span class="o">&amp;</span><span class="n">dur</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
       <h1 class="entry-title"><a href="/blog/2012/11/12/ultimate-goal-dissecting-natural-language/">Ultimate Goal: Better Natural Language Processing</a></h1>
     
     
@@ -89,6 +554,8 @@ major &hellip;">
 
 
 <time datetime="2012-11-12T00:02:00+09:00" pubdate data-updated="true">12<span>th</span> Nov 2012 00:02 (JST)</time>
+        
+         | <a href="/blog/2012/11/12/ultimate-goal-dissecting-natural-language/#disqus_thread">Comments</a>
         
       </p>
     
@@ -176,6 +643,10 @@ and 1 TB of RAM.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2012/11/25/measuring-cpu-time/">Measuring CPU time, Boost and C++11</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2012/11/12/ultimate-goal-dissecting-natural-language/">Ultimate Goal: Better Natural Language Processing</a>
       </li>
     
@@ -200,9 +671,39 @@ and 1 TB of RAM.</p>
 </footer>
   
 
+<script type="text/javascript">
+      var disqus_shortname = 'stringalgosufex';
+      
+        
+        var disqus_script = 'count.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
 
 
 
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
 
 
 
@@ -215,6 +716,10 @@ and 1 TB of RAM.</p>
       document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
     })();
   </script>
+
+
+
+
 
 
 
