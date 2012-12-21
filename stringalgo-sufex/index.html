@@ -9,7 +9,7 @@
   <meta name="author" content="jogojapan">
 
   
-  <meta name="description" content=" Stringalgo::sufex 11th Nov 2012 23:51 (JST) 11th Nov 2012 23:51 (JST) Tweet Recent Posts Ultimate Goal: Better Natural Language Processing ">
+  <meta name="description" content="Stringalgo::sufex 11th Nov 2012 23:51 (JST) 11th Nov 2012 23:51 (JST) Tweet Comments Please enable JavaScript to view the comments powered by Disqus &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -28,6 +28,17 @@
   <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
 <link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
 <link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+<!-- For table-of-contents, using jQuery from Google. This is according to advice given on
+     http://brizzled.clapper.org/blog/2012/02/04/generating-a-table-of-contents-in-octopress/. -->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+  // Revert jQuery's '$' alias, to avoid clashes with ender.js. NOTE: Use
+  // jQuery(...), instead of $(...) from here on.
+  jQuery.noConflict();
+</script>
+<script src="/javascripts/generate-toc.js" type="text/javascript"></script>
+<script src="/javascripts/jquery.tableofcontents.min.js" type="text/javascript"></script>
 
   
 
@@ -109,6 +120,10 @@
   <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://jogojapan.github.com/stringalgo-sufex/index.html" data-via="" data-counturl="http://jogojapan.github.com/stringalgo-sufex/index.html" >Tweet</a>
   
   
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
   
 </div>
 
@@ -117,6 +132,12 @@
   
 </article>
 
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
 </div>
 
 <aside class="sidebar">
@@ -124,6 +145,10 @@
     <section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2012/11/25/measuring-cpu-time/">Measuring CPU time, Boost and C++11</a>
+      </li>
     
       <li class="post">
         <a href="/blog/2012/11/12/ultimate-goal-dissecting-natural-language/">Ultimate Goal: Better Natural Language Processing</a>
@@ -151,9 +176,42 @@
 </footer>
   
 
+<script type="text/javascript">
+      var disqus_shortname = 'stringalgosufex';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://jogojapan.github.com/stringalgo-sufex/index.html';
+        var disqus_url = 'http://jogojapan.github.com/stringalgo-sufex/index.html';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
 
 
 
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
 
 
 
@@ -166,6 +224,10 @@
       document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
     })();
   </script>
+
+
+
+
 
 
 
