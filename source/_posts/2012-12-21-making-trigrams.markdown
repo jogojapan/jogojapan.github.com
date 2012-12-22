@@ -4,6 +4,7 @@ title: "Making trigrams"
 date: 2012-12-21 19:57
 comments: true
 published: false
+toc: true
 categories: 
 ---
 
@@ -39,8 +40,11 @@ to actually store these three characters inside the trigram
 representation, along with the position information or
 pointer. However, this isn't _necessary_.
 
-Sufex provides three different implementations of trigrams, and the
-sorting algorithms are designed to work with any of them:
+Sufex provides **three different implementations** of trigrams, and
+the sorting algorithms are designed to work with any of them. The
+three types are specified by the values of an enumeration called
+`sux::TGImpl`, while the actual data type for trigrams is defined as a
+struct called `sux::TrigramImpl`:
 
 {% codeblock Trigram implementations lang:cpp %}
 namespace sux {
@@ -55,8 +59,8 @@ namespace sux {
 
 `Char` and `Pos` represent data types for individual characters and
 position/offset information, respectively. Hence, when using `char`
-for characters and `long` for positions, a single trigram is of one of
-the three types below:
+for characters and `long` for positions, a single trigram can be
+stored in one of three data structures shown below:
 
 {% codeblock Trigram implementations lang:cpp %}
 using namespace sux;
@@ -91,5 +95,127 @@ construction.
 # Generating trigrams
 
 The DC algorithm involves creating an array of trigrams at positions p
-such that `p % 3 = 1,2`. For this, the `TrigramMaker` can be used:
+such that `p % 3 = 1,2`. For this, the `sux::TrigramMaker` can be
+used:
 
+{% codeblock Trigram generation lang:cpp %}
+  using namespace std;
+  using namespace sux;
+  string input { "abcabeabxd" };
+
+  /* Generating trigrams. */
+  auto trigrams =
+      TrigramMaker<TGImpl::tuple,string::value_type,size_t>::make_23trigrams(begin(input),end(input));
+
+  /* Printing them. */
+  for (const auto &trigram : trigrams)
+    cout << triget1(trigram) << triget2(trigram) << triget3(trigram) << '\n';
+  cout.flush();
+{% endcodeblock lang:cpp %}
+
+Evidently, `TrigramMaker` takes three template arguments:
+
+ * The trigram implementation (`TGImpl::tuple`, `TGImpl::arraytuple`
+   or `TGImpl::pointer`);
+ * The character type (e.g. `char`)
+ * The position type (e.g. `unsigned long`)
+
+It's `make_23trigrams` function must be applied to a range of
+characters specified by two iterators. The value returned is a
+`std::vector` of trigrams.
+
+There is a **convenience function** `sux::string_to_23trigrams()` that
+can be used if the input is stored in a `std::basic_string`:
+
+{% codeblock Trigram generation lang:cpp %}
+  using namespace std;
+  using namespace sux;
+  string input { "abcabeabxd" };
+
+  /* Generating trigrams. */
+  auto trigrams = string_to_23trigrams<TGImpl::arraytuple>(input);
+
+  /* Printing them. */
+  for (const auto &trigram : trigrams)
+    cout << triget1(trigram) << triget2(trigram) << triget3(trigram) << '\n';
+  cout.flush();
+{% endcodeblock lang:cpp %}
+
+It takes only one template argument, the trigram implementation. It
+defaults to `TGImpl::tuple`.
+
+
+# Sorting trigrams
+
+Trigrams are sorted in three passes of radix sort. During the first
+pass, trigrams are put into buckets according to the third character
+of each trigrams. During the second pass, they are stably sorted into
+buckets defined by the second character, and during the third pass
+they are stably sorted into buckets defined by the first
+character. Each pass can be parallelized by running several radix-sort
+threads in parallel, each on a different chunk of the trigrams.
+
+The implementation is encapsulated in the `sux::TrigramSorter`
+template, which can be applied to any implementation of trigrams,
+i.e. regardless of whether `TGImpl::tuple`, `TGImple::arraytuple` or
+`TGImpl::pointer` is used, and regardless of the data types used for
+characters and positions.
+
+Again, there is a **convenience function** `sux::sort_23trigrams()`,
+which takes two arguments:
+
+ * The trigram container (i.e. what was returned by
+   `make_23trigrams()`)
+ * The desired number of threads (defaults to 1)
+
+Hence, the easiest way to create the 2,3-trigrams from a `std::string`
+and sort them using parallel 2 threads is this:
+
+{% codeblock Trigram generation lang:cpp %}
+  using namespace std;
+  using namespace sux;
+
+  /* Input. */
+  string input { "abcabeabxd" };
+
+  /* 2,3-Trigrams. */
+  auto trigrams = string_to_23trigrams(input);
+
+  /* Trigram sorting using 2 parallel threads. */
+  sort_23trigrams(trigrams,2);
+
+  /* Printing the results. */
+  for (const auto &trigram : trigrams)
+    cout << triget1(trigram) << triget2(trigram) << triget3(trigram) << '\n';
+  cout.flush();
+{% endcodeblock lang:cpp %}
+
+
+# Running times for different trigram implementations
+
+I've compared running times of trigram sorting for the three
+implementations of trigrams, and for two different sorting algorithms:
+The radix sort described above, and `std::stable_sort`.
+
+The comparison involved running each version once on a dual-core Intel
+machine (2 T9300 cores, L1-cache 32KB per core, L2 cache 6144 KB for
+both cores, 4 GB RAM) and measuring user time, system time and real
+time in milliseconds. The results are reported in [this Google spreadsheet](https://docs.google.com/spreadsheet/pub?key=0AqDFvV2_pwzSdHBKSWRrdWdUUzFiSnhENnFJcFljWUE&output=html).
+
+{% img left http://jogojapan.github.com/images/trigram-running-time.png 300 200 4-threads radix sort vs. 1-thread std::stable_sort %}
+
+**Main observations**
+
+1. `TGImpl::tuple` and `TGImpl::arraytuple` are equally fast, but
+`TGImpl::pointer` is considerably slower. This is no surprise, as
+using pointer requires derefencing it in each comparison step.
+1. In **one-thread mode**, `std::stable_sort` is faster than my radix
+sort implementation. I believe this is mainly caused by the fact that
+radix sort needs to **determine the alphabet** and count the number of
+occurrences of every character, in *each* radix pass. This is
+acceptable, because during the recursive steps of suffix array
+construction (not yet implemented), an integer alphabet is used, which
+does not require this step.
+1. In **multithreading mode**, radix sort is **much faster in terms of
+real time** (yellow bars) than the built-in `std::stable_sort` (which
+runs on one thread only).
