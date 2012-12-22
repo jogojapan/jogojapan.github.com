@@ -3,7 +3,7 @@ layout: post
 title: "Making trigrams"
 date: 2012-12-21 19:57
 comments: true
-published: false
+published: true
 toc: true
 categories: 
 ---
@@ -202,7 +202,7 @@ machine (2 T9300 cores, L1-cache 32KB per core, L2 cache 6144 KB for
 both cores, 4 GB RAM) and measuring user time, system time and real
 time in milliseconds. The results are reported in [this Google spreadsheet](https://docs.google.com/spreadsheet/pub?key=0AqDFvV2_pwzSdHBKSWRrdWdUUzFiSnhENnFJcFljWUE&output=html).
 
-{% img left http://jogojapan.github.com/images/trigram-running-time.png 300 200 4-threads radix sort vs. 1-thread std::stable_sort %}
+{% img http://jogojapan.github.com/images/trigram-running-time.png 650 550 4-threads radix sort vs. 1-thread std::stable_sort %}
 
 **Main observations**
 
