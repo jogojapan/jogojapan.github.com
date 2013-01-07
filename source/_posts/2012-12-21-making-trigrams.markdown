@@ -26,7 +26,7 @@ this step is
 [`sux/trigram.hpp`](https://github.com/jogojapan/sufex/blob/master/src/sux/trigram.hpp).
 
 
-# Trigram implementation
+## Trigram implementation
 
 In later steps of the algorithm, Sufex needs to access the trigrams at
 the place where they are found in the input text. Therefore, the
@@ -92,7 +92,7 @@ but can more easily be extended to store n-grams with higher n, which
 may become important in alternative implementations of suffix array
 construction.
 
-# Generating trigrams
+## Generating trigrams
 
 The DC algorithm involves creating an array of trigrams at positions p
 such that `p % 3 = 1,2`. For this, the `sux::TrigramMaker` can be
@@ -145,7 +145,7 @@ It takes only one template argument, the trigram implementation. It
 defaults to `TGImpl::tuple`.
 
 
-# Sorting trigrams
+## Sorting trigrams
 
 Trigrams are sorted in three passes of radix sort. During the first
 pass, trigrams are put into buckets according to the third character
@@ -191,7 +191,7 @@ and sort them using parallel 2 threads is this:
 {% endcodeblock lang:cpp %}
 
 
-# Running times for different trigram implementations
+## Running times for different trigram implementations
 
 I've compared running times of trigram sorting for the three
 implementations of trigrams, and for two different sorting algorithms:
