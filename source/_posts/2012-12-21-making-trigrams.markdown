@@ -18,7 +18,7 @@ generation is the **DC algorithm**, also known as **Skew algorithm**
 discovered by Juha Kärkkäinen and Peter Sanders in 2003.
 
 I won't describe the algorithm here, however, its first step is to
-generate trigrams from the input test and sorting them
+generate trigrams from the input text and sorting them
 lexicographically. The algorithm does not generate _all_ trigrams, but
 only those located at positions not divisible by three, i.e. positions
 `p` such that `p % 3` is `1` or `2`. The module of Sufex that performs
@@ -29,7 +29,7 @@ this step is
 # Trigram implementation
 
 In later steps of the algorithm, Sufex needs to access the trigrams at
-the place where there are found in the input text. Therefore, the
+the place where they are found in the input text. Therefore, the
 trigram implementation must include either the relative position of
 the trigram within the text, or a pointer to the character location.
 
