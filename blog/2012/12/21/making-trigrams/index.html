@@ -1,0 +1,551 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Making trigrams - stringalgo::sufex</title>
+  <meta name="author" content="jogojapan">
+
+  
+  <meta name="description" content="Today I want to quickly introduce the first building block of the
+suffix array library that is part of Sufex: Trigram generation. One of the most &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jogojapan.github.com/blog/2012/12/21/making-trigrams/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="stringalgo::sufex" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+<!-- For table-of-contents, using jQuery from Google. This is according to advice given on
+     http://brizzled.clapper.org/blog/2012/02/04/generating-a-table-of-contents-in-octopress/. -->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+  // Revert jQuery's '$' alias, to avoid clashes with ender.js. NOTE: Use
+  // jQuery(...), instead of $(...) from here on.
+  jQuery.noConflict();
+</script>
+<script src="/javascripts/generate-toc.js" type="text/javascript"></script>
+<script src="/javascripts/jquery.tableofcontents.min.js" type="text/javascript"></script>
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">stringalgo::sufex</a></h1>
+  
+    <h2>Thoughts, suggestions and reports on string algorithms, natural language processing and C++</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jogojapan.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Making Trigrams</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-21T19:57:00+09:00" pubdate data-updated="true">21<span>st</span> Dec 2012 19:57 (JST)</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Today I want to quickly introduce the first building block of the
+suffix array library that is part of Sufex: Trigram generation.</p>
+
+<p>One of the most important modern algorithms for suffix array
+generation is the <strong>DC algorithm</strong>, also known as <strong>Skew algorithm</strong>
+(<a href="http://link.springer.com/chapter/10.1007%2F3-540-45061-0_73?LI=true">DOI
+10.1007/3-540-45061-0_73</a>),
+discovered by Juha Kärkkäinen and Peter Sanders in 2003.</p>
+
+<p>I won&#8217;t describe the algorithm here, however, its first step is to
+generate trigrams from the input text and sorting them
+lexicographically. The algorithm does not generate <em>all</em> trigrams, but
+only those located at positions not divisible by three, i.e. positions
+<code>p</code> such that <code>p % 3</code> is <code>1</code> or <code>2</code>. The module of Sufex that performs
+this step is
+<a href="https://github.com/jogojapan/sufex/blob/master/src/sux/trigram.hpp"><code>sux/trigram.hpp</code></a>.</p>
+
+<h1>Trigram implementation</h1>
+
+<p>In later steps of the algorithm, Sufex needs to access the trigrams at
+the place where they are found in the input text. Therefore, the
+trigram implementation must include either the relative position of
+the trigram within the text, or a pointer to the character location.</p>
+
+<p>During the sorting step, lots of trigrams must be compared to each
+other, which requires access only to the three characters that belong
+to each trigram. For better cache-efficiency, it is therefore useful
+to actually store these three characters inside the trigram
+representation, along with the position information or
+pointer. However, this isn&#8217;t <em>necessary</em>.</p>
+
+<p>Sufex provides <strong>three different implementations</strong> of trigrams, and
+the sorting algorithms are designed to work with any of them. The
+three types are specified by the values of an enumeration called
+<code>sux::TGImpl</code>, while the actual data type for trigrams is defined as a
+struct called <code>sux::TrigramImpl</code>:</p>
+
+<figure class='code'><figcaption><span>Trigram implementations  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">namespace</span> <span class="n">sux</span> <span class="p">{</span>
+</span><span class='line'>  <span class="cm">/* Three implementations of trigrams: */</span>
+</span><span class='line'>  <span class="k">enum</span> <span class="k">class</span> <span class="nc">TGImpl</span> <span class="p">{</span> <span class="n">tuple</span><span class="p">,</span> <span class="n">arraytuple</span><span class="p">,</span> <span class="n">pointer</span> <span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Data type for the trigram implementation: */</span>
+</span><span class='line'>  <span class="k">template</span> <span class="o">&lt;</span><span class="n">TGImpl</span> <span class="n">tgimpl</span><span class="p">,</span> <span class="k">typename</span> <span class="n">Char</span><span class="p">,</span> <span class="k">typename</span> <span class="n">Pos</span><span class="o">&gt;</span>
+</span><span class='line'>  <span class="k">struct</span> <span class="n">TrigramImpl</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>Char</code> and <code>Pos</code> represent data types for individual characters and
+position/offset information, respectively. Hence, when using <code>char</code>
+for characters and <code>long</code> for positions, a single trigram can be
+stored in one of three data structures shown below:</p>
+
+<figure class='code'><figcaption><span>Trigram implementations  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">using</span> <span class="k">namespace</span> <span class="n">sux</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">/* Using a single pointer to represent the trigram: */</span>
+</span><span class='line'><span class="n">TrigramImpl</span><span class="o">&lt;</span><span class="n">TGImpl</span><span class="o">::</span><span class="n">pointer</span><span class="p">,</span><span class="kt">char</span><span class="p">,</span><span class="kt">long</span><span class="o">&gt;</span>    <span class="n">trigram1</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">/* Using std::tuple&lt;long,char,char,char&gt; to encode position</span>
+</span><span class='line'><span class="cm">   and contents of the trigram: */</span>
+</span><span class='line'><span class="n">TrigramImpl</span><span class="o">&lt;</span><span class="n">TGImpl</span><span class="o">::</span><span class="n">tuple</span><span class="p">,</span><span class="kt">char</span><span class="p">,</span><span class="kt">long</span><span class="o">&gt;</span>      <span class="n">trigram2</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">/* Using std::tuple&lt;long,std::array&lt;char,3&gt;&gt; to encode position</span>
+</span><span class='line'><span class="cm">   and contents of the trigram: */</span>
+</span><span class='line'><span class="n">TrigramImpl</span><span class="o">&lt;</span><span class="n">TGImpl</span><span class="o">::</span><span class="n">arraytuple</span><span class="p">,</span><span class="kt">char</span><span class="p">,</span><span class="kt">long</span><span class="o">&gt;</span> <span class="n">trigram3</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The first one, <code>TGImpl::pointer</code>, consists of a single pointer <code>char
+*</code> only and is therefore small in memory but relatively slow during
+sorting.</p>
+
+<p>The second one, <code>TGImpl::tuple</code>, uses a <code>std::tuple</code> to store both the
+relative position of the trigram and its contents. This is the fastest
+implementation during sorting.</p>
+
+<p>The third one, <code>TGImpl::arraytuple</code>, uses a combination of
+<code>std::tuple</code> and <code>std::array</code> to store the relative position and the
+contents of the trigram. It is a little slower than <code>TGImpl::tuple</code>,
+but can more easily be extended to store n-grams with higher n, which
+may become important in alternative implementations of suffix array
+construction.</p>
+
+<h1>Generating trigrams</h1>
+
+<p>The DC algorithm involves creating an array of trigrams at positions p
+such that <code>p % 3 = 1,2</code>. For this, the <code>sux::TrigramMaker</code> can be
+used:</p>
+
+<figure class='code'><figcaption><span>Trigram generation  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'>  <span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">using</span> <span class="k">namespace</span> <span class="n">sux</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">string</span> <span class="n">input</span> <span class="p">{</span> <span class="s">&quot;abcabeabxd&quot;</span> <span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Generating trigrams. */</span>
+</span><span class='line'>  <span class="k">auto</span> <span class="n">trigrams</span> <span class="o">=</span>
+</span><span class='line'>      <span class="n">TrigramMaker</span><span class="o">&lt;</span><span class="n">TGImpl</span><span class="o">::</span><span class="n">tuple</span><span class="p">,</span><span class="n">string</span><span class="o">::</span><span class="n">value_type</span><span class="p">,</span><span class="n">size_t</span><span class="o">&gt;::</span><span class="n">make_23trigrams</span><span class="p">(</span><span class="n">begin</span><span class="p">(</span><span class="n">input</span><span class="p">),</span><span class="n">end</span><span class="p">(</span><span class="n">input</span><span class="p">));</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Printing them. */</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="k">const</span> <span class="k">auto</span> <span class="o">&amp;</span><span class="n">trigram</span> <span class="o">:</span> <span class="n">trigrams</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">triget1</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">triget2</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">triget3</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="sc">&#39;\n&#39;</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">cout</span><span class="p">.</span><span class="n">flush</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Evidently, <code>TrigramMaker</code> takes three template arguments:</p>
+
+<ul>
+<li>The trigram implementation (<code>TGImpl::tuple</code>, <code>TGImpl::arraytuple</code>
+or <code>TGImpl::pointer</code>);</li>
+<li>The character type (e.g. <code>char</code>)</li>
+<li>The position type (e.g. <code>unsigned long</code>)</li>
+</ul>
+
+
+<p>It&#8217;s <code>make_23trigrams</code> function must be applied to a range of
+characters specified by two iterators. The value returned is a
+<code>std::vector</code> of trigrams.</p>
+
+<p>There is a <strong>convenience function</strong> <code>sux::string_to_23trigrams()</code> that
+can be used if the input is stored in a <code>std::basic_string</code>:</p>
+
+<figure class='code'><figcaption><span>Trigram generation  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'>  <span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">using</span> <span class="k">namespace</span> <span class="n">sux</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">string</span> <span class="n">input</span> <span class="p">{</span> <span class="s">&quot;abcabeabxd&quot;</span> <span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Generating trigrams. */</span>
+</span><span class='line'>  <span class="k">auto</span> <span class="n">trigrams</span> <span class="o">=</span> <span class="n">string_to_23trigrams</span><span class="o">&lt;</span><span class="n">TGImpl</span><span class="o">::</span><span class="n">arraytuple</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Printing them. */</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="k">const</span> <span class="k">auto</span> <span class="o">&amp;</span><span class="n">trigram</span> <span class="o">:</span> <span class="n">trigrams</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">triget1</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">triget2</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">triget3</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="sc">&#39;\n&#39;</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">cout</span><span class="p">.</span><span class="n">flush</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It takes only one template argument, the trigram implementation. It
+defaults to <code>TGImpl::tuple</code>.</p>
+
+<h1>Sorting trigrams</h1>
+
+<p>Trigrams are sorted in three passes of radix sort. During the first
+pass, trigrams are put into buckets according to the third character
+of each trigrams. During the second pass, they are stably sorted into
+buckets defined by the second character, and during the third pass
+they are stably sorted into buckets defined by the first
+character. Each pass can be parallelized by running several radix-sort
+threads in parallel, each on a different chunk of the trigrams.</p>
+
+<p>The implementation is encapsulated in the <code>sux::TrigramSorter</code>
+template, which can be applied to any implementation of trigrams,
+i.e. regardless of whether <code>TGImpl::tuple</code>, <code>TGImple::arraytuple</code> or
+<code>TGImpl::pointer</code> is used, and regardless of the data types used for
+characters and positions.</p>
+
+<p>Again, there is a <strong>convenience function</strong> <code>sux::sort_23trigrams()</code>,
+which takes two arguments:</p>
+
+<ul>
+<li>The trigram container (i.e. what was returned by
+<code>make_23trigrams()</code>)</li>
+<li>The desired number of threads (defaults to 1)</li>
+</ul>
+
+
+<p>Hence, the easiest way to create the 2,3-trigrams from a <code>std::string</code>
+and sort them using parallel 2 threads is this:</p>
+
+<figure class='code'><figcaption><span>Trigram generation  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'>  <span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">using</span> <span class="k">namespace</span> <span class="n">sux</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Input. */</span>
+</span><span class='line'>  <span class="n">string</span> <span class="n">input</span> <span class="p">{</span> <span class="s">&quot;abcabeabxd&quot;</span> <span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* 2,3-Trigrams. */</span>
+</span><span class='line'>  <span class="k">auto</span> <span class="n">trigrams</span> <span class="o">=</span> <span class="n">string_to_23trigrams</span><span class="p">(</span><span class="n">input</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Trigram sorting using 2 parallel threads. */</span>
+</span><span class='line'>  <span class="n">sort_23trigrams</span><span class="p">(</span><span class="n">trigrams</span><span class="p">,</span><span class="mi">2</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/* Printing the results. */</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="k">const</span> <span class="k">auto</span> <span class="o">&amp;</span><span class="n">trigram</span> <span class="o">:</span> <span class="n">trigrams</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">triget1</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">triget2</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">triget3</span><span class="p">(</span><span class="n">trigram</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="sc">&#39;\n&#39;</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">cout</span><span class="p">.</span><span class="n">flush</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h1>Running times for different trigram implementations</h1>
+
+<p>I&#8217;ve compared running times of trigram sorting for the three
+implementations of trigrams, and for two different sorting algorithms:
+The radix sort described above, and <code>std::stable_sort</code>.</p>
+
+<p>The comparison involved running each version once on a dual-core Intel
+machine (2 T9300 cores, L1-cache 32KB per core, L2 cache 6144 KB for
+both cores, 4 GB RAM) and measuring user time, system time and real
+time in milliseconds. The results are reported in <a href="https://docs.google.com/spreadsheet/pub?key=0AqDFvV2_pwzSdHBKSWRrdWdUUzFiSnhENnFJcFljWUE&amp;output=html">this Google spreadsheet</a>.</p>
+
+<p><img src="http://jogojapan.github.com/images/trigram-running-time.png" width="650" height="550" title="4-threads radix sort vs. 1-thread std::stable_sort" ></p>
+
+<p><strong>Main observations</strong></p>
+
+<ol>
+<li><code>TGImpl::tuple</code> and <code>TGImpl::arraytuple</code> are equally fast, but
+<code>TGImpl::pointer</code> is considerably slower. This is no surprise, as
+using pointer requires derefencing it in each comparison step.</li>
+<li>In <strong>one-thread mode</strong>, <code>std::stable_sort</code> is faster than my radix
+sort implementation. I believe this is mainly caused by the fact that
+radix sort needs to <strong>determine the alphabet</strong> and count the number of
+occurrences of every character, in <em>each</em> radix pass. This is
+acceptable, because during the recursive steps of suffix array
+construction (not yet implemented), an integer alphabet is used, which
+does not require this step.</li>
+<li>In <strong>multithreading mode</strong>, radix sort is <strong>much faster in terms of
+real time</strong> (yellow bars) than the built-in <code>std::stable_sort</code> (which
+runs on one thread only).</li>
+</ol>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jogojapan</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-21T19:57:00+09:00" pubdate data-updated="true">21<span>st</span> Dec 2012 19:57 (JST)</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://jogojapan.github.com/blog/2012/12/21/making-trigrams/" data-via="" data-counturl="http://jogojapan.github.com/blog/2012/12/21/making-trigrams/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/11/25/measuring-cpu-time/" title="Previous Post: Measuring CPU time, Boost and C++11">&laquo; Measuring CPU time, Boost and C++11</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2012/12/21/making-trigrams/">Making trigrams</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/25/measuring-cpu-time/">Measuring CPU time, Boost and C++11</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/12/ultimate-goal-dissecting-natural-language/">Ultimate Goal: Better Natural Language Processing</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - jogojapan -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a>. Design by <a href="http://octopressthemes.com">Octopress Themes</a>. Background image by ryoko</span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'stringalgosufex';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://jogojapan.github.com/blog/2012/12/21/making-trigrams/';
+        var disqus_url = 'http://jogojapan.github.com/blog/2012/12/21/making-trigrams/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+  jQuery(document).ready(function() {
+    // Put a TOC right before the entry content.
+    generateTOC('.entry-content', 'Table of Contents');
+  });
+  </script>
+
+
+
+</body>
+</html>
