@@ -119,7 +119,7 @@ precise time-measurements into the C++ code, so as to be able to
 measure precisely what amount of time is spent in which part of the
 program.</p>
 
-<h1>Two types of time</h1>
+<h2>Two types of time</h2>
 
 <p>There are two types of time I need to be able to measure:</p>
 
@@ -144,11 +144,9 @@ Linux you can retrieve using a system call:
 <strong>Thread-specific CPU time</strong>, but I won&#8217;t talk about this in the
 current post.</p>
 
-<hr />
+<h2>Library support</h2>
 
-<h1>Library support</h1>
-
-<h2>C++11</h2>
+<h3>C++11</h3>
 
 <p>C++11 offers a convenient method to measure real time, <strong>but not CPU
 time</strong>, through the <a href="http://en.cppreference.com/w/cpp/chrono#chrono_library"><code>&lt;chrono&gt;</code> library</a>.
@@ -195,7 +193,7 @@ of choice (using <code>std::chrono::duration_cast</code>):</p>
 unfortunately this can only be used to measure real time, not CPU
 time.</p>
 
-<h2>Boost</h2>
+<h3>Boost</h3>
 
 <p>The Boost library provides a similarly designed framework with the
 same clocks for real time (in fact, of course, <code>std::chrono</code> was
@@ -219,7 +217,7 @@ boost::chrono::process_real_cpu_clock::now()   // Wall-clock time, measured usin
 for all three types of CPU clock. This is also <strong>portable</strong> and
 <strong>convenient</strong>, but I had a <strong>number of problems</strong> with this:</p>
 
-<h2>Problems with Boost</h2>
+<h3>Problems with Boost</h3>
 
 <ul>
 <li><p><code>boost::chrono::time_point</code> objects returned by the Boost clocks are
@@ -247,9 +245,7 @@ pretty-printing seems to be available for them.</p></li>
 </ul>
 
 
-<hr />
-
-<h1>New implementation: <code>rlxutil::combined_clock</code></h1>
+<h2>New implementation: <code>rlxutil::combined_clock</code></h2>
 
 <p>What I wanted is a clock that returns time points which include user,
 system and real time, where real time is measured using the
@@ -268,7 +264,7 @@ determine the internal representation of the time points: As
 nanoseconds when <code>std::nano</code> is used, as microseconds when
 <code>std::micro</code> is used, and so on.</p>
 
-<h2>Usage</h2>
+<h3>Usage</h3>
 
 <p>Here is an example of how it&#8217;s used:</p>
 
@@ -352,7 +348,7 @@ nanoseconds when <code>std::nano</code> is used, as microseconds when
 <pre><code>Elapsed time: [user 40, system 0, real 1070 millisec]
 </code></pre>
 
-<h2>Implementation</h2>
+<h3>Implementation</h3>
 
 <p>The static <code>now()</code> function generates a time point by calling
 <code>::times</code> to retrieve user and system time, as well as calling
